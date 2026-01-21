@@ -1,38 +1,61 @@
-import axiosInstance from "./axios.js";
+const FIREBASE_API_KEY = "AIzaSyCF330pJcqJAQgBR20dk-Gf21C8ORsyeV8";
 
 export async function logIn(data) {
-  const formData = new URLSearchParams();
-  formData.append("username", data.email);
-  formData.append("password", data.password);
-
   try {
-    const response = await axiosInstance.post("/login", formData, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+    const response = await axios.post(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
+      {
+        email: data.email,
+        password: data.password,
+        returnSecureToken: true,
       },
-    });
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
     const {
-      access_token,
-      refresh_token,
-      expires_in,
-      refresh_expires_in,
-      token_type,
+      idToken,
+      refreshToken,
+      expiresIn,
+      tokenType,
+      localId,
+      email,
     } = response.data;
 
-    localStorage.setItem("access_token", access_token);
-    localStorage.setItem("refresh_token", refresh_token);
-    localStorage.setItem("access_token_expiry", (Date.now() + expires_in * 1000).toString());
-    localStorage.setItem("refresh_token_expiry", (Date.now() + refresh_expires_in * 1000).toString());
-    localStorage.setItem("token_type", token_type);
+    localStorage.setItem("access_token", idToken);
+    localStorage.setItem("refresh_token", refreshToken);
+    localStorage.setItem(
+      "access_token_expiry",
+      (Date.now() + Number(expiresIn) * 1000).toString()
+    );
+    localStorage.setItem("token_type", tokenType || "Bearer");
+    localStorage.setItem("uid", localId);
+    localStorage.setItem("email", email);
 
     return;
   } catch (error) {
-    const message =
-      error?.response?.data?.error_description ||
-      error?.response?.data?.message ||
-      error?.message ||
-      "Login failed. Please try again.";
+    const firebaseError = error?.response?.data?.error;
+
+    let message = "Login failed. Please try again.";
+
+    if (firebaseError) {
+      switch (firebaseError.message) {
+        case "EMAIL_NOT_FOUND":
+          message = "Email not found.";
+          break;
+        case "INVALID_PASSWORD":
+          message = "Invalid password.";
+          break;
+        case "USER_DISABLED":
+          message = "This account has been disabled.";
+          break;
+        default:
+          message = firebaseError.message;
+      }
+    }
 
     throw new Error(message);
   }
